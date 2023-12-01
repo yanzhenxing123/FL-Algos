@@ -2,6 +2,7 @@
 @Time : 2023/11/29 18:43
 @Author : yanzx
 @Description : 自定的模拟 simulation
+fn：function
 """
 from collections import OrderedDict
 from typing import Dict, List, Optional, Tuple
@@ -172,17 +173,34 @@ def client_fn(cid) -> FlowerClient:
     return FlowerClient(cid, net, trainloader, valloader)
 
 
+# The `evaluate` function will be by Flower called after every round
+def evaluate(
+        server_round: int,
+        parameters: fl.common.NDArrays,
+        config: Dict[str, fl.common.Scalar]) -> Optional[Tuple[float, Dict[str, fl.common.Scalar]]]:
+    """
+    Server-side evaluation
+    """
+    net = Net().to(DEVICE)
+    valloader = valloaders[0]
+    set_parameters(net, parameters)  # Update model with the latest parameters
+    loss, accuracy = test(net, valloader)
+    print(f"Server-side evaluation loss {loss} / accuracy {accuracy}")
+    return loss, {"accuracy": accuracy}
+
+
 # Create an instance of the model and get the parameters
 params = get_parameters(Net())
 
 # Pass parameters to the Strategy for server-side parameter initialization
 strategy = fl.server.strategy.FedAvg(  # 使用FedAvg
-    fraction_fit=0.3,
+    fraction_fit=0.3,  # 对客户端进行采样的概率
     fraction_evaluate=0.3,
     min_fit_clients=3,
     min_evaluate_clients=3,
     min_available_clients=NUM_CLIENTS,
-    initial_parameters=fl.common.ndarrays_to_parameters(params),
+    initial_parameters=fl.common.ndarrays_to_parameters(params),  # 避免初始化从客户端获取参数
+    evaluate_fn=evaluate,  # 将函数进行传递
 )
 
 # Specify client resources if you need GPU (defaults to 1 CPU and 0 GPU)
